@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WebHID Vendor-defined Demo</title>
+</head>
+<body>
+    <h1>WebHID Vendor-defined Demo</h1>
+    <button onclick="connectHidDevice()">Connect HID Device (Vendor-defined)</button>
+    <p id="status">Not Connected</p>
+    <p>Detected Operations:</p>
+    <pre id="output"></pre>
+    <input id="sendByte5" type="number" min="0" max="255" value="0" style="width:80px; margin-left:8px;" disabled>
+    <button id="sendButton5" onclick="sendVendorOutput(5)" disabled>Send 1 Byte</button>
+    <input id="sendByte6" type="number" min="0" max="65535" value="0" style="width:80px; margin-left:8px;" disabled>
+    <button id="sendButton6" onclick="sendVendorOutput(6)" disabled>Send 2 Bytes</button>
+    <script>
+
+        const uint8ArrayToHexString = (arr) => '0x' + Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+        const outElem = document.getElementById('output');
+        const statusElem = document.getElementById('status');
+
+        // Keep history for outElem (latest 5 items)
+        const outputHistory = [" "," "," "," "," "];
+        const OUTPUT_HISTORY_MAX = 5;
+
+        function addOutput(msg) {
+            const ts = new Date().toLocaleTimeString();
+            const line = `[${ts}] ${msg}`;
+            outputHistory.unshift(line);
+            if (outputHistory.length > OUTPUT_HISTORY_MAX) outputHistory.length = OUTPUT_HISTORY_MAX;
+            outElem.textContent = outputHistory.join('\n');
+        }
+        addOutput("Waiting for connection...");
+
+        // HID Usage Page: Vendor-defined
+        // Setting to 0x0C ensures it's included as a device and gets filtered correctly
+        const USAGE_PAGE = 0xFFFE;
+        // HID Usage ID: Vendor
+        const USAGE = 0x01;
+
+        // Hold the globally opened device
+        let connectedDevice = null;
+        // Cache the Vendor-defined Report ID obtained from the input report
+        let cachedVendorDefinedReportId = null;
+
+        /**
+         * Requests an HID device and listens for events.
+         */
+        async function connectHidDevice() {
+            // Check if WebHID is supported
+            if (!('hid' in navigator)) {
+                console.error("WebHID API is not supported.");
+                statusElem.textContent = "Error: WebHID API is not supported.";
+                return;
+            }
+
+            // Filters to prompt the user to select a device
+            const filters = [{
+                usagePage: USAGE_PAGE,
+                usage: USAGE
+            }];
+
+            try {
+                // Request the user to select a device
+                const devices = await navigator.hid.requestDevice({ filters });
+
+                if (devices.length === 0) {
+                    statusElem.textContent = "No device was selected.";
+                    return;
+                }
+
+                const device = devices[0];
+                connectedDevice = device;
+
+                // Open the device (Report Descriptor may become available after open())
+                if (!device.opened) {
+                    await device.open();
+                }
+
+                // Start listening for input report events
+                device.addEventListener('inputreport', handleInputReport);
+                console.log(`Started listening for 'inputreport' events from device ${device.productName}.`);
+
+                // After open(), get/cache the report ID & update status display
+                statusElem.textContent = `Connected: ${device.productName}`;
+
+                // Enable the send UI
+                const sendEl5 = document.getElementById('sendByte5');
+                const sendEl6 = document.getElementById('sendByte6');
+                const sendBtn5 = document.getElementById('sendButton5');
+                const sendBtn6 = document.getElementById('sendButton6');
+                if (sendEl5) sendEl5.disabled = false;
+                if (sendEl6) sendEl6.disabled = false;
+                if (sendBtn5) sendBtn5.disabled = false;
+                if (sendBtn6) sendBtn6.disabled = false;
+
+            } catch (error) {
+                console.error("An error occurred while connecting to the HID device:", error);
+                statusElem.textContent = `Connection Error: ${error.message}`;
+            }
+        }
+
+
+        /**
+         * Parses the Report Descriptor and finds the Report ID with the specified Usage.
+         * Returns 0 if no Report ID is set.
+         * @param {HIDDevice} device - The target HID device
+         * @returns {number} Report ID
+         */
+        function getVendorDefinedReportId(device) {
+            if (!device || !device.collections) return 0;
+
+            for (const collection of device.collections) {
+                // Find a collection that has both Page and Usage
+                if (collection.usagePage === USAGE_PAGE && collection.usage === USAGE) {
+                    // Return the Report ID (0 if not defined)
+                    //console.log(`Found report id ${collection.reportId}`);
+                    return collection.reportId || 0;
+                }
+                // Recursively check child collections (for composite devices)
+                if (collection.children) { 
+                    const childId = getVendorDefinedReportId({ collections: collection.children });
+                    //console.log(`Found childId report id ${childId}`);
+                    if (childId) return childId;
+                }
+            }
+            return 0;
+        }
+
+
+        /**
+         * Handles the 'inputreport' event.
+         * @param {HIDInputReportEvent} event - HID input report event
+         */
+        function handleInputReport(event) {
+            const { reportId, data } = event;
+
+            // Ignore if the Report ID is different
+            //console.log('handleInputReport reportId:', reportId);   
+            const expectedReportId = getVendorDefinedReportId(event.target);
+            if (expectedReportId !== 0 && reportId !== expectedReportId) {
+                return;
+            }
+
+            // Cache the received reportId here (use the first value that comes in)
+            if (cachedVendorDefinedReportId === null) {
+                cachedVendorDefinedReportId = reportId;
+                //console.log('cachedVendorDefinedReportId set to', cachedVendorDefinedReportId);
+                // Reflect in the status display as well
+                statusElem.textContent += ` (reportId: ${cachedVendorDefinedReportId})`;
+            }
+
+            // Read using DataView in Little Endian.
+            const u8data = new Uint8Array(data.buffer);
+            if (u8data.length == 0) {
+                // Report is short or in an unexpected format
+                console.warn("Unexpected report size:");
+                return;
+            }
+
+            addOutput(`Input Report (ID: ${reportId}): ${uint8ArrayToHexString(u8data)}`);
+            console.log(`Input Report (ID: ${reportId}): ${uint8ArrayToHexString(u8data)}`);
+        }
+
+
+        /**
+         * Writes and sends a value to the specified reportId.
+         * If the value fits in 1 byte, send a single byte.
+         * If the value requires 2 bytes (<= 0xFFFF), send two bytes in LITTLE-ENDIAN order.
+         * Uses WebHID's sendReport.
+         */
+        async function sendVendorOutput(_reportId) {
+            if (!connectedDevice) {
+                statusElem.textContent = 'Error: Device not connected.';
+                return;
+            }
+
+            // Read value from the corresponding input element (e.g. sendByte5 or sendByte6)
+            const input = document.getElementById('sendByte' + String(_reportId));
+            if (!input) return;
+            let val = parseInt(input.value, 10);
+
+            // Determine allowed range depending on button/report type
+            const maxAllowed = (_reportId === 6) ? 0xFFFF : 0xFF;
+            if (Number.isNaN(val) || val < 0 || val > maxAllowed) {
+                statusElem.textContent = `Error: enter a value between 0 and ${maxAllowed}.`;
+                return;
+            }
+
+            try {
+                if (!connectedDevice.opened) {
+                    await connectedDevice.open();
+                }
+
+                let data;
+                if (val <= 0xFF) {
+                    // 1-byte value
+                    data = new Uint8Array([val & 0xFF]);
+                } else {
+                    // 2-byte little-endian
+                    data = new Uint8Array([val & 0xFF, (val >> 8) & 0xFF]);
+                }
+
+                // sendReport accepts a reportId and a Uint8Array
+                await connectedDevice.sendReport(_reportId, data);
+
+                // Show output and status
+                const hex = Array.from(data).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+                addOutput(`Output Report (ID: ${_reportId}): ${hex}`);
+                console.log(`Output Report (ID: ${_reportId}): ${hex}`);
+            } catch (err) {
+                console.error('Send Error:', err);
+                statusElem.textContent = `Send Error: ${err.message || err}`;
+            }
+        }
+        </script>
+    </body>
+</html>
