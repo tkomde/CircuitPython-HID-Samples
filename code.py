@@ -12,8 +12,7 @@ from adafruit_ble.services.standard.device_info import DeviceInfoService
 # from adafruit_hid.mouse import Mouse
 # from adafruit_hid.consumer_control import ConsumerControl
 # from adafruit_hid.consumer_control_code import ConsumerControlCode
-
-from ble_hid_device import Device
+from adafruit_hid import find_device
 
 # Vendor-Defined Report (Report ID 5/6, USAGE 0xFFFE) was attached
 hid_descriptor = (
@@ -154,7 +153,7 @@ else:
 # kl = KeyboardLayoutUS(k)
 # cc = ConsumerControl(hid.devices)
 # m = Mouse(hid.devices)
-vd = Device(hid.devices, report_ids=[5, 6])
+vd = find_device(hid.devices, usage_page=0xfe, usage=0x01)
 
 while True:
     ite = 0
