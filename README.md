@@ -18,3 +18,9 @@ Items that did not move are also listed.
 |:--:|:--|:--|:--|
 | Telephony device (BLE) | Telephony Devices(0x0B) usage is likely not supported by the host OS. | Xiao nRF52840 Sense(CircuitPython 10.1.0-beta.1) | Pixel 10 (Android 16)<br/>iPhone 16 Pro (iOS 26) |
 | Telephony device (USB) | Telephony Devices(0x0B) usage is likely not supported by the host OS. | M5AtomS3(CircuitPython 10.1.0-beta.1) | Pixel 10 (Android 16)|
+
+## Notes
+
+Consumer Page is convenient for controll smartphone.
+0xCD (Play/Pause): Answer the phone call
+0xCF (Voice command): Launch Gemini/Siri
