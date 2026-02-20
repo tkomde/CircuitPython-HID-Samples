@@ -11,6 +11,7 @@ Items that did not move are also listed.
 | Gamepad (USB) | Simple gamepad, the code written within the standard library that is commented out. Data from the IMU emulating the stick's movement. | M5AtomS3  | -Windows<br/>- macOS |
 | Gamepad Fullspec Test(USB) | A configuration similar to the Gamepad commonly sold. | M5AtomS3 | Descriptors are only tested |
 | Call from smartphone (BLE) | When the board tilts, activate voice command (via consumer controll) and execute call (via keyboard). | Xiao nRF52840 Sense (CircuitPython 10.1.0-beta.1) | Pixel 10 (Android 16) |
+| USB Host Mouse | Capture usb mouse data with CircuitPython | Raspberry Pi Pico 2 W | CircuitPython 10.1.1 |
 
 ## List of sample that didn't work
 
